@@ -10,126 +10,85 @@
     <script src="https://cdn.tailwindcss.com"></script>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@react-three/fiber@8.13.0/dist/react-three-fiber.umd.js"></script>
 
     <link href="https://fonts.googleapis.com/css2?family=Geist+Mono&display=swap" rel="stylesheet">
     
     <style>
-        :root {
-            --background: #000000;
-            --foreground: #ffffff;
-        }
-        body { 
-            background-color: var(--background); 
-            color: var(--foreground);
-            margin: 0;
-            overflow: hidden;
-            font-family: 'Geist Mono', monospace;
-        }
-        .canvas-container {
-            position: fixed;
-            inset: 0;
-            z-index: 0;
-            pointer-events: none;
-        }
-        .ui-layer {
-            position: relative;
-            z-index: 10;
-            height: 100vh;
-            overflow-y: auto;
-            background: rgba(0,0,0,0.4);
-            backdrop-filter: blur(4px);
-        }
-        .shader-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.3s ease;
-        }
-        .shader-card:hover {
-            border-color: #ff5722; /* Accenting with the energy color from your snippet */
-            background: rgba(255, 255, 255, 0.08);
-        }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Geist Mono', monospace; }
+        #bg-canvas { position: fixed; top: 0; left: 0; z-index: 1; }
+        #root { position: relative; z-index: 10; height: 100vh; overflow-y: auto; background: rgba(0,0,0,0.2); }
+        .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.1); }
     </style>
 </head>
 <body>
+    <canvas id="bg-canvas"></canvas>
+
     <div id="root"></div>
 
-    <script type="text/babel">
-        const { useState, useEffect, useRef, useMemo } = React;
-        const { Canvas, useFrame } = ReactThreeFiber;
-
-        // --- 21st.dev SHADER LOGIC ---
+    <script>
         const vertexShader = `
             uniform float time;
-            uniform float intensity;
             varying vec2 vUv;
             void main() {
                 vUv = uv;
                 vec3 pos = position;
-                pos.y += sin(pos.x * 10.0 + time) * 0.1 * intensity;
-                pos.x += cos(pos.y * 8.0 + time * 1.5) * 0.05 * intensity;
+                pos.y += sin(pos.x * 10.0 + time) * 0.1;
+                pos.x += cos(pos.y * 8.0 + time * 1.5) * 0.05;
                 gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
             }
         `;
 
         const fragmentShader = `
             uniform float time;
-            uniform float intensity;
             uniform vec3 color1;
             uniform vec3 color2;
             varying vec2 vUv;
             void main() {
                 vec2 uv = vUv;
                 float noise = sin(uv.x * 20.0 + time) * cos(uv.y * 15.0 + time * 0.8);
-                noise += sin(uv.x * 35.0 - time * 2.0) * cos(uv.y * 25.0 + time * 1.2) * 0.5;
                 vec3 color = mix(color1, color2, noise * 0.5 + 0.5);
-                color = mix(color, vec3(1.0), pow(abs(noise), 2.0) * intensity);
                 float glow = 1.0 - length(uv - 0.5) * 2.0;
-                glow = pow(glow, 2.0);
-                gl_FragColor = vec4(color * glow, glow * 0.4);
+                gl_FragColor = vec4(color * pow(glow, 2.0), 0.6);
             }
         `;
 
-        function ShaderPlane() {
-            const mesh = useRef();
-            const uniforms = useMemo(() => ({
-                time: { value: 0 },
-                intensity: { value: 1.0 },
-                color1: { value: new THREE.Color("#ff5722") },
-                color2: { value: new THREE.Color("#000000") }
-            }), []);
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('bg-canvas'), alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
 
-            useFrame((state) => {
-                if (mesh.current) {
-                    uniforms.time.value = state.clock.elapsedTime;
-                    uniforms.intensity.value = 1.0 + Math.sin(state.clock.elapsedTime * 2) * 0.3;
-                }
-            });
+        const geometry = new THREE.PlaneGeometry(10, 10, 64, 64);
+        const uniforms = {
+            time: { value: 0 },
+            color1: { value: new THREE.Color("#ff5722") },
+            color2: { value: new THREE.Color("#000000") }
+        };
+        const material = new THREE.ShaderMaterial({ 
+            uniforms, vertexShader, fragmentShader, transparent: true, side: THREE.DoubleSide 
+        });
+        const plane = new THREE.Mesh(geometry, material);
+        scene.add(plane);
+        camera.position.z = 3;
 
-            return (
-                <mesh ref={mesh} position={[0, 0, 0]}>
-                    <planeGeometry args={[15, 15, 32, 32]} />
-                    <shaderMaterial 
-                        uniforms={uniforms} 
-                        vertexShader={vertexShader} 
-                        fragmentShader={fragmentShader} 
-                        transparent 
-                        side={THREE.DoubleSide} 
-                    />
-                </mesh>
-            );
+        function animate() {
+            requestAnimationFrame(animate);
+            uniforms.time.value += 0.01;
+            renderer.render(scene, camera);
         }
+        animate();
 
-        // --- MAIN DASHBOARD LOGIC ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
         function App() {
             const [hooks, setHooks] = useState([]);
-
-            const getCleanBrand = (url) => {
-                try {
-                    const host = new URL(url).hostname.replace('www.', '');
-                    return host.split('.')[0].toUpperCase();
-                } catch (e) { return "LINK"; }
-            };
 
             useEffect(() => {
                 const saved = localStorage.getItem('hooked_data');
@@ -146,54 +105,28 @@
             }, []);
 
             return (
-                <div className="relative">
-                    {/* Background Layer */}
-                    <div className="canvas-container">
-                        <Canvas camera={{ position: [0, 0, 5] }}>
-                            <ShaderPlane />
-                        </Canvas>
-                    </div>
+                <div className="max-w-6xl mx-auto px-8 py-12">
+                    <header className="flex justify-between items-baseline mb-20 border-b border-white/10 pb-6">
+                        <h1 className="text-2xl font-bold tracking-tighter uppercase italic">
+                            Hooked <span className="text-[#ff5722]">AI</span>
+                        </h1>
+                        <p className="text-[10px] text-gray-500 tracking-[0.3em]">SHADER_CORE_V1</p>
+                    </header>
 
-                    {/* Content Layer */}
-                    <div className="ui-layer px-8 py-12">
-                        <div className="max-w-6xl mx-auto">
-                            <header className="flex justify-between items-baseline mb-20 border-b border-white/10 pb-6">
-                                <h1 className="text-2xl font-bold tracking-tighter uppercase italic">
-                                    Hooked <span className="text-[#ff5722]">AI</span>
-                                </h1>
-                                <p className="text-[10px] text-gray-500 tracking-[0.3em]">LOCAL_SYNCHRONIZED_VAULT</p>
-                            </header>
-
-                            {hooks.length === 0 ? (
-                                <div className="text-center py-40 border border-white/5 bg-black/20 rounded-2xl">
-                                    <p className="text-gray-500 text-xs uppercase tracking-widest animate-pulse">Scanning for captures...</p>
+                    {hooks.length === 0 ? (
+                        <p className="text-gray-500 text-xs animate-pulse">AWAITING CAPTURE...</p>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                            {hooks.map((hook) => (
+                                <div key={hook.id} className="glass-card p-8 rounded-xl" onClick={() => window.open(hook.url, '_blank')}>
+                                    <span className="text-[9px] text-[#ff5722] font-bold block mb-4 uppercase tracking-widest">
+                                        {new URL(hook.url).hostname.replace('www.', '').split('.')[0]}
+                                    </span>
+                                    <h3 className="text-sm text-gray-200 truncate">{hook.url}</h3>
                                 </div>
-                            ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {hooks.map((hook) => (
-                                        <div 
-                                            key={hook.id} 
-                                            className="shader-card p-8 rounded-xl cursor-pointer"
-                                            onClick={() => window.open(hook.url, '_blank')}
-                                        >
-                                            <div className="flex justify-between items-start mb-6">
-                                                <span className="text-[9px] font-bold text-[#ff5722] border border-[#ff5722]/30 px-2 py-0.5 rounded">
-                                                    {getCleanBrand(hook.url)}
-                                                </span>
-                                                <span className="text-[9px] text-gray-500">
-                                                    {new Date(hook.timestamp || Date.now()).toLocaleDateString()}
-                                                </span>
-                                            </div>
-                                            <h3 className="text-sm text-gray-200 truncate mb-4">
-                                                {hook.url.replace(/^https?:\/\//, '')}
-                                            </h3>
-                                            <p className="text-[9px] text-gray-600 uppercase tracking-tighter italic">// Analysis pending...</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                            ))}
                         </div>
-                    </div>
+                    )}
                 </div>
             );
         }
