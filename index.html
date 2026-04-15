@@ -17,12 +17,24 @@
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Geist Mono', monospace; }
         #bg-canvas { position: fixed; top: 0; left: 0; z-index: 1; }
         #root { position: relative; z-index: 10; height: 100vh; overflow-y: auto; background: rgba(0,0,0,0.2); }
-        .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        
+        .glass-card { 
+            background: rgba(255, 255, 255, 0.03); 
+            backdrop-filter: blur(8px); 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            cursor: pointer; /* FIXED: Change arrow to hand */
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .glass-card:hover {
+            border-color: rgba(255, 87, 34, 0.5); /* Glowing edge on hover */
+            background: rgba(255, 255, 255, 0.06);
+            transform: translateY(-2px);
+        }
     </style>
 </head>
 <body>
     <canvas id="bg-canvas"></canvas>
-
     <div id="root"></div>
 
     <script>
@@ -63,16 +75,14 @@
             color1: { value: new THREE.Color("#ff5722") },
             color2: { value: new THREE.Color("#000000") }
         };
-        const material = new THREE.ShaderMaterial({ 
-            uniforms, vertexShader, fragmentShader, transparent: true, side: THREE.DoubleSide 
-        });
+        const material = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader, transparent: true, side: THREE.DoubleSide });
         const plane = new THREE.Mesh(geometry, material);
         scene.add(plane);
         camera.position.z = 3;
 
         function animate() {
             requestAnimationFrame(animate);
-            uniforms.time.value += 0.01;
+            uniforms.time.value += 0.005; // Slightly slower movement for elegance
             renderer.render(scene, camera);
         }
         animate();
@@ -89,6 +99,21 @@
 
         function App() {
             const [hooks, setHooks] = useState([]);
+
+            // Helper to clean up titles
+            const getCleanTitle = (url) => {
+                if (!url) return "";
+                return url
+                    .replace(/^https?:\/\/(www\.)?/, '') // Remove http/https and www
+                    .replace(/\/$/, '');                // Remove trailing slash
+            };
+
+            const getCleanBrand = (url) => {
+                try {
+                    const host = new URL(url).hostname.replace('www.', '');
+                    return host.includes('github.io') ? "GH-PAGES" : host.split('.')[0].toUpperCase();
+                } catch (e) { return "SOURCE"; }
+            };
 
             useEffect(() => {
                 const saved = localStorage.getItem('hooked_data');
@@ -107,22 +132,43 @@
             return (
                 <div className="max-w-6xl mx-auto px-8 py-12">
                     <header className="flex justify-between items-baseline mb-20 border-b border-white/10 pb-6">
-                        <h1 className="text-2xl font-bold tracking-tighter uppercase italic">
-                            Hooked <span className="text-[#ff5722]">AI</span>
-                        </h1>
-                        <p className="text-[10px] text-gray-500 tracking-[0.3em]">SHADER_CORE_V1</p>
+                        <div>
+                            <h1 className="text-2xl font-bold tracking-tighter uppercase italic">
+                                Hooked <span className="text-[#ff5722]">AI</span>
+                            </h1>
+                            <p className="text-[9px] text-gray-500 tracking-[0.4em] mt-1 uppercase">Local Insight Vault // v2.1</p>
+                        </div>
+                        <button onClick={() => {localStorage.clear(); setHooks([]);}} className="text-[10px] text-gray-600 hover:text-red-400 transition tracking-widest uppercase">Clear All</button>
                     </header>
 
                     {hooks.length === 0 ? (
-                        <p className="text-gray-500 text-xs animate-pulse">AWAITING CAPTURE...</p>
+                        <div className="text-center py-40 bg-white/[0.02] border border-dashed border-white/10 rounded-2xl">
+                            <p className="text-gray-600 text-[10px] tracking-[0.2em] animate-pulse">NO INCOMING DATA DETECTED</p>
+                        </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <div className="flex flex-col gap-6">
                             {hooks.map((hook) => (
-                                <div key={hook.id} className="glass-card p-8 rounded-xl" onClick={() => window.open(hook.url, '_blank')}>
-                                    <span className="text-[9px] text-[#ff5722] font-bold block mb-4 uppercase tracking-widest">
-                                        {new URL(hook.url).hostname.replace('www.', '').split('.')[0]}
-                                    </span>
-                                    <h3 className="text-sm text-gray-200 truncate">{hook.url}</h3>
+                                <div 
+                                    key={hook.id} 
+                                    className="glass-card p-8 rounded-2xl group" 
+                                    onClick={() => window.open(hook.url, '_blank')}
+                                >
+                                    <div className="flex justify-between items-center mb-4">
+                                        <span className="text-[10px] text-[#ff5722] font-bold tracking-widest uppercase">
+                                            {getCleanBrand(hook.url)}
+                                        </span>
+                                        <span className="text-[10px] text-gray-600 font-mono">
+                                            {new Date(hook.timestamp || Date.now()).toLocaleDateString()}
+                                        </span>
+                                    </div>
+                                    <h3 className="text-base text-gray-100 font-light truncate group-hover:text-white transition">
+                                        {getCleanTitle(hook.url)}
+                                    </h3>
+                                    <div className="mt-4 pt-4 border-t border-white/5">
+                                        <p className="text-[10px] text-gray-600 italic tracking-tight font-mono uppercase">
+                                            // Status: Capture Secured
+                                        </p>
+                                    </div>
                                 </div>
                             ))}
                         </div>
