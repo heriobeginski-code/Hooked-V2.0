@@ -3,134 +3,194 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hooked Dashboard</title>
+    <title>Hooked AI | Insights</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.158.0/three.min.js"></script>
+    <script src="https://unpkg.com/@react-three/fiber@8.15.11/dist/react-three-fiber.umd.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600&display=swap" rel="stylesheet">
+    
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .card-animate { animation: slideIn 0.3s ease-out; }
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        :root {
+            --background: #000000;
+            --foreground: #ffffff;
+            --card: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.1);
+        }
+        body { 
+            font-family: 'Geist', sans-serif; 
+            background-color: var(--background);
+            color: var(--foreground);
+            margin: 0;
+            overflow-x: hidden;
+        }
+        .canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.6;
+        }
+        .glass-card {
+            background: var(--card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+        }
+        .glass-card:hover {
+            border-color: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.06);
         }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef, useMemo } = React;
+        const { Canvas, useFrame } = ReactThreeFiber;
 
+        // --- SHADER COMPONENTS ---
+        const vertexShader = `
+            uniform float time;
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                vec3 pos = position;
+                pos.z += sin(pos.x * 3.0 + time) * 0.2;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+            }
+        `;
+
+        const fragmentShader = `
+            uniform float time;
+            uniform vec3 color1;
+            uniform vec3 color2;
+            varying vec2 vUv;
+            void main() {
+                float noise = sin(vUv.x * 10.0 + time) * cos(vUv.y * 10.0 + time);
+                vec3 color = mix(color1, color2, noise * 0.5 + 0.5);
+                gl_FragColor = vec4(color, 0.15);
+            }
+        `;
+
+        function BackgroundShader() {
+            const mesh = useRef();
+            const uniforms = useMemo(() => ({
+                time: { value: 0 },
+                color1: { value: new THREE.Color("#1a1a1a") },
+                color2: { value: new THREE.Color("#000000") }
+            }), []);
+
+            useFrame((state) => {
+                if (mesh.current) {
+                    uniforms.time.value = state.clock.elapsedTime * 0.5;
+                }
+            });
+
+            return (
+                <mesh ref={mesh} rotation={[-Math.PI / 2, 0, 0]}>
+                    <planeGeometry args={[20, 20, 64, 64]} />
+                    <shaderMaterial 
+                        uniforms={uniforms} 
+                        vertexShader={vertexShader} 
+                        fragmentShader={fragmentShader} 
+                        transparent={true}
+                    />
+                </mesh>
+            );
+        }
+
+        // --- MAIN APP ---
         function App() {
             const [hooks, setHooks] = useState([]);
 
-            // IMPROVED: Logic to extract a clean "Brand" name
             const getCleanBrand = (url) => {
                 try {
-                    const urlObj = new URL(url);
-                    let hostname = urlObj.hostname.replace('www.', '');
-                    
-                    // Specific logic for GitHub Pages
-                    if (hostname.includes('github.io')) {
-                        return "GITHUB PROJECT";
-                    }
-                    
-                    const name = hostname.split('.')[0];
-                    return name.toUpperCase();
-                } catch (e) {
-                    return "LINK";
-                }
+                    const hostname = new URL(url).hostname.replace('www.', '');
+                    if (hostname.includes('github.io')) return "GITHUB PROJECT";
+                    return hostname.split('.')[0].toUpperCase();
+                } catch (e) { return "LINK"; }
             };
 
-            // IMPROVED: Logic to strip HTTPS and noise from the title
-            const getCleanTitle = (url) => {
-                return url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
-            };
+            const getCleanTitle = (url) => url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
 
             useEffect(() => {
-                // 1. Load initial data from localStorage
                 const saved = localStorage.getItem('hooked_data');
-                if (saved) {
-                    try {
-                        setHooks(JSON.parse(saved));
-                    } catch (e) {
-                        console.error("Error parsing saved data", e);
-                    }
-                }
+                if (saved) setHooks(JSON.parse(saved));
 
-                // 2. The Listener for the Extension
                 const handleMessage = (event) => {
                     if (event.data && event.data.type === "NEW_HOOKS") {
-                        console.log("📥 Received Data:", event.data.data);
                         setHooks(event.data.data);
                         localStorage.setItem('hooked_data', JSON.stringify(event.data.data));
                     }
                 };
-
                 window.addEventListener("message", handleMessage);
                 return () => window.removeEventListener("message", handleMessage);
             }, []);
 
-            const clearAll = () => {
-                if(confirm("Clear all saved hooks?")) {
-                    localStorage.removeItem('hooked_data');
-                    setHooks([]);
-                }
-            };
-
             return (
-                <div className="max-w-6xl mx-auto px-6 py-12">
-                    <header className="flex justify-between items-center mb-12 border-b border-gray-200 pb-6">
-                        <div>
-                            <h1 className="text-2xl font-bold tracking-tight text-gray-900 uppercase">
-                                Hooked <span className="text-blue-600">AI</span>
-                            </h1>
-                            <p className="text-sm text-gray-500">Your captured insights, synced locally.</p>
-                        </div>
-                        <button 
-                            onClick={clearAll} 
-                            className="text-xs font-semibold text-gray-400 hover:text-red-500 transition tracking-widest"
-                        >
-                            CLEAR ALL
-                        </button>
-                    </header>
+                <div className="relative min-h-screen">
+                    {/* The 3D Shader Background */}
+                    <div className="canvas-container">
+                        <Canvas camera={{ position: [0, 5, 10] }}>
+                            <BackgroundShader />
+                        </Canvas>
+                    </div>
 
-                    {hooks.length === 0 ? (
-                        <div className="text-center py-20 border-2 border-dashed border-gray-200 rounded-2xl bg-white">
-                            <p className="text-gray-400 font-medium">No hooks found yet.</p>
-                            <p className="text-xs text-gray-300 mt-2 italic">Press Command+Shift+S on any website to capture it.</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {hooks.map((hook) => (
-                                <div 
-                                    key={hook.id} 
-                                    className="card-animate bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer group"
-                                    onClick={() => window.open(hook.url, '_blank')}
-                                >
-                                    <div className="flex justify-between items-start mb-4">
-                                        <span className="text-[10px] font-bold tracking-widest text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                                            {getCleanBrand(hook.url)}
-                                        </span>
-                                        <span className="text-[10px] text-gray-400 font-mono">
-                                            {new Date(hook.timestamp || Date.now()).toLocaleDateString()}
-                                        </span>
-                                    </div>
-                                    <h3 className="text-sm font-semibold text-gray-800 mb-2 truncate group-hover:text-blue-600 transition">
-                                        {getCleanTitle(hook.url)}
-                                    </h3>
-                                    <div className="mt-4 pt-4 border-t border-gray-50">
-                                        <p className="text-[11px] text-gray-400 leading-relaxed italic uppercase tracking-tighter">
-                                            "AI Summary pending analysis..."
+                    {/* UI Content */}
+                    <div className="max-w-6xl mx-auto px-6 py-12 relative z-10">
+                        <header className="flex justify-between items-center mb-16 border-b border-white/10 pb-8">
+                            <div>
+                                <h1 className="text-3xl font-bold tracking-tighter text-white uppercase italic">
+                                    Hooked <span className="text-gray-500 font-light">AI</span>
+                                </h1>
+                                <p className="text-xs text-gray-500 mt-1 tracking-widest font-mono">ENCRYPTED LOCAL STORAGE // V2.0</p>
+                            </div>
+                            <button onClick={() => { localStorage.clear(); setHooks([]); }} className="text-[10px] text-gray-600 hover:text-white transition tracking-[0.2em]">
+                                PURGE ALL
+                            </button>
+                        </header>
+
+                        {hooks.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-40 border border-white/5 rounded-3xl bg-white/[0.02]">
+                                <div className="animate-pulse w-2 h-2 bg-blue-500 rounded-full mb-4"></div>
+                                <p className="text-gray-500 text-sm font-mono tracking-tight">WAITING FOR INCOMING DATA...</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                {hooks.map((hook) => (
+                                    <div 
+                                        key={hook.id} 
+                                        className="glass-card p-8 rounded-2xl cursor-pointer group"
+                                        onClick={() => window.open(hook.url, '_blank')}
+                                    >
+                                        <div className="flex justify-between items-center mb-6">
+                                            <span className="text-[9px] font-bold tracking-[0.2em] text-white bg-white/10 px-3 py-1 rounded-full">
+                                                {getCleanBrand(hook.url)}
+                                            </span>
+                                            <span className="text-[9px] text-gray-600 font-mono">
+                                                {new Date(hook.timestamp || Date.now()).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                        <h3 className="text-base font-medium text-gray-200 mb-4 truncate group-hover:text-white transition">
+                                            {getCleanTitle(hook.url)}
+                                        </h3>
+                                        <div className="h-[1px] w-full bg-white/5 mb-4"></div>
+                                        <p className="text-[10px] text-gray-500 leading-relaxed font-mono tracking-tighter uppercase opacity-60">
+                                            // Analysis: Processing metadata...
                                         </p>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             );
         }
