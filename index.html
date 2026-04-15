@@ -27,15 +27,27 @@
         function App() {
             const [hooks, setHooks] = useState([]);
 
-            // Helper to clean URL into a Brand Name (e.g., linkedin.com -> LINKEDIN)
+            // IMPROVED: Logic to extract a clean "Brand" name
             const getCleanBrand = (url) => {
                 try {
-                    const hostname = new URL(url).hostname;
-                    const name = hostname.replace('www.', '').split('.')[0];
+                    const urlObj = new URL(url);
+                    let hostname = urlObj.hostname.replace('www.', '');
+                    
+                    // Specific logic for GitHub Pages
+                    if (hostname.includes('github.io')) {
+                        return "GITHUB PROJECT";
+                    }
+                    
+                    const name = hostname.split('.')[0];
                     return name.toUpperCase();
                 } catch (e) {
                     return "LINK";
                 }
+            };
+
+            // IMPROVED: Logic to strip HTTPS and noise from the title
+            const getCleanTitle = (url) => {
+                return url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
             };
 
             useEffect(() => {
@@ -49,11 +61,10 @@
                     }
                 }
 
-                // 2. The Listener for the "Handshake" from content.js
+                // 2. The Listener for the Extension
                 const handleMessage = (event) => {
-                    // Check if message is coming from our extension bridge
                     if (event.data && event.data.type === "NEW_HOOKS") {
-                        console.log("📥 Dashboard received new data:", event.data.data);
+                        console.log("📥 Received Data:", event.data.data);
                         setHooks(event.data.data);
                         localStorage.setItem('hooked_data', JSON.stringify(event.data.data));
                     }
@@ -89,7 +100,7 @@
 
                     {hooks.length === 0 ? (
                         <div className="text-center py-20 border-2 border-dashed border-gray-200 rounded-2xl bg-white">
-                            <p className="text-gray-400">No hooks found yet.</p>
+                            <p className="text-gray-400 font-medium">No hooks found yet.</p>
                             <p className="text-xs text-gray-300 mt-2 italic">Press Command+Shift+S on any website to capture it.</p>
                         </div>
                     ) : (
@@ -108,9 +119,8 @@
                                             {new Date(hook.timestamp || Date.now()).toLocaleDateString()}
                                         </span>
                                     </div>
-                                   <h3 className="text-sm font-semibold text-gray-800 mb-2 truncate group-hover:text-blue-600 transition">
-    {hook.url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
-                                   </h3>
+                                    <h3 className="text-sm font-semibold text-gray-800 mb-2 truncate group-hover:text-blue-600 transition">
+                                        {getCleanTitle(hook.url)}
                                     </h3>
                                     <div className="mt-4 pt-4 border-t border-gray-50">
                                         <p className="text-[11px] text-gray-400 leading-relaxed italic uppercase tracking-tighter">
