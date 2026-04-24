@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hooked | Demo Mode</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -11,87 +10,67 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #F5F5F5; color: #1A1A1A; }
-        .hook-card { background: white; border: 1px solid rgba(0,0,0,0.05); border-radius: 16px; }
-        .btn-reset { background: white; color: #EF4444; border: 1px solid #FEE2E2; transition: all 0.2s; }
-        .btn-reset:hover { background: #FEF2F2; border-color: #FECACA; }
+        .hook-card { background: white; border: 1px solid rgba(0,0,0,0.05); border-radius: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .btn-reset { color: #EF4444; background: #FFF1F2; border: 1px solid #FECACA; transition: all 0.2s; }
+        .btn-reset:hover { background: #FEE2E2; }
     </style>
 </head>
 <body>
     <div id="root"></div>
-
     <script type="text/babel">
         const { useState, useEffect } = React;
 
         function App() {
-            const [hooks, setHooks] = useState(() => {
-                const saved = localStorage.getItem('hooked_demo');
-                return saved ? JSON.parse(saved) : [];
-            });
-
-            useEffect(() => {
-                localStorage.setItem('hooked_demo', JSON.stringify(hooks));
-            }, [hooks]);
+            const [hooks, setHooks] = useState([]);
 
             useEffect(() => {
                 const handleMessage = (event) => {
                     if (event.data && event.data.type === "NEW_HOOKS") {
                         const incoming = event.data.data;
                         
-                        setHooks(prev => {
-                            // 1. If it's the full history array (first load)
-                            if (Array.isArray(incoming)) {
-                                // To fix the "all tabs" bug, we take ONLY the first (most recent) item 
-                                // if we are in the middle of a demo capture.
-                                return incoming; 
-                            }
-                            
-                            // 2. If it's a single item (The Sniper Fix)
-                            const exists = prev.some(h => h.id === incoming.id);
-                            return exists ? prev : [incoming, ...prev];
-                        });
+                        // FIX: If the extension sends an array of ALL tabs, 
+                        // we only take the most recent one (index 0) for the demo.
+                        if (Array.isArray(incoming) && incoming.length > 0) {
+                            const latestHook = incoming[0];
+                            setHooks(prev => {
+                                const exists = prev.some(h => h.id === latestHook.id);
+                                return exists ? prev : [latestHook, ...prev];
+                            });
+                        }
                     }
                 };
-
                 window.addEventListener('message', handleMessage);
                 return () => window.removeEventListener('message', handleMessage);
             }, []);
 
-            const clearAll = () => {
-                setHooks([]);
-                localStorage.removeItem('hooked_demo');
-            };
-
             return (
-                <div className="max-w-xl mx-auto py-16 px-6">
+                <div className="max-w-xl mx-auto py-20 px-6">
                     <header className="flex justify-between items-center mb-12">
                         <div>
-                            <h1 className="text-2xl font-semibold tracking-tight">Hooked</h1>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] mt-1">Collector Engine</p>
+                            <h1 className="text-3xl font-bold tracking-tight">Hooked</h1>
+                            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Ready for Capture</p>
                         </div>
-                        
-                        <div className="flex gap-3">
-                            <button onClick={clearAll} className="btn-reset px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest">
-                                Reset
-                            </button>
-                            <div className="bg-white border border-black/5 px-4 py-2 rounded-full text-sm font-bold text-gray-400 shadow-sm">
-                                {hooks.length}
-                            </div>
-                        </div>
+                        <button 
+                            onClick={() => setHooks([])} 
+                            className="btn-reset px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"
+                        >
+                            Reset
+                        </button>
                     </header>
 
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                         {hooks.length === 0 ? (
-                            <div className="py-20 text-center border-2 border-dashed border-gray-200 rounded-[32px]">
-                                <p className="text-gray-400 text-sm font-medium">Dashboard Clean. Ready to Hook.</p>
+                            <div className="py-24 text-center border-2 border-dashed border-gray-200 rounded-[32px] bg-white/50">
+                                <p className="text-gray-400 font-medium">Dashboard Clear.</p>
                             </div>
                         ) : (
                             hooks.map(h => (
-                                <div key={h.id} className="hook-card p-6 flex justify-between items-center animate-in fade-in slide-in-from-bottom-3">
+                                <div key={h.id} className="hook-card p-6 flex justify-between items-center animate-in fade-in slide-in-from-bottom-4 duration-500">
                                     <div className="truncate mr-4">
-                                        <h3 className="font-semibold text-gray-800">{h.brand}</h3>
-                                        <p className="text-[11px] text-gray-400 truncate mt-0.5">{h.url}</p>
+                                        <h3 className="font-bold text-gray-900 text-lg">{h.brand}</h3>
+                                        <p className="text-xs text-gray-400 truncate mt-1">{h.url}</p>
                                     </div>
-                                    <a href={h.url} target="_blank" className="bg-black text-white text-[10px] font-bold px-5 py-2.5 rounded-xl uppercase tracking-tighter">Open</a>
+                                    <a href={h.url} target="_blank" className="bg-black text-white text-[10px] font-bold px-6 py-3 rounded-xl uppercase tracking-tighter shadow-lg shadow-black/10">Open</a>
                                 </div>
                             ))
                         )}
@@ -99,9 +78,7 @@
                 </div>
             );
         }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 </html>
