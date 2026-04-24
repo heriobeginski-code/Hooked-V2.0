@@ -1,16 +1,16 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Hooked | Dashboard</title>
+    <meta charset="UTF-8"><title>Hooked Dashboard</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #F5F5F5; }
-        .hook-card { border: 1px solid rgba(0,0,0,0.05); border-radius: 16px; transition: all 0.2s; }
-        .hook-card:hover { border-color: rgba(0,0,0,0.2); background: #fafafa; }
+        body { font-family: 'Inter', sans-serif; background-color: #F5F5F5; color: #1A1A1A; }
+        .card { background: white; border: 1px solid rgba(0,0,0,0.05); border-radius: 16px; transition: all 0.2s ease; }
+        .card:hover { border-color: rgba(0,0,0,0.15); transform: translateY(-1px); }
     </style>
 </head>
 <body>
@@ -22,9 +22,10 @@
             const [hooks, setHooks] = useState([]);
 
             useEffect(() => {
-                const handleMessage = (e) => {
-                    if (e.data.source === 'EXT_BRIDGE') {
-                        setHooks(prev => [e.data.hook, ...prev]);
+                const handleMessage = (event) => {
+                    // Check if message is from our bridge
+                    if (event.data && event.data.source === 'HOOKED_EXT') {
+                        setHooks(prev => [event.data.hook, ...prev]);
                     }
                 };
                 window.addEventListener('message', handleMessage);
@@ -32,30 +33,33 @@
             }, []);
 
             return (
-                <div className="p-10 max-w-2xl mx-auto">
-                    <div className="flex justify-between items-center mb-10">
-                        <h1 className="text-xl font-semibold text-gray-800">Hooked</h1>
-                        <span className="text-xs text-gray-400 bg-white px-3 py-1 rounded-full border border-black/5">
-                            {hooks.length} Captures
-                        </span>
+                <div className="max-w-2xl mx-auto py-12 px-6">
+                    <div className="flex justify-between items-end mb-10">
+                        <div>
+                            <h1 className="text-2xl font-semibold tracking-tight">Hooked</h1>
+                            <p className="text-sm text-gray-400">Instant Capture Dashboard</p>
+                        </div>
+                        <div className="text-xs font-medium text-gray-400 uppercase tracking-widest bg-white border border-black/5 px-3 py-1 rounded-full">
+                            {hooks.length} Links
+                        </div>
                     </div>
 
                     <div className="space-y-3">
                         {hooks.length === 0 && (
-                            <div className="text-center py-20 text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
-                                No hooks yet. Press Ctrl+Shift+Y to capture.
+                            <div className="py-20 text-center card bg-transparent border-dashed border-2 border-gray-200">
+                                <p className="text-gray-400">Dashboard active. Waiting for hooks...</p>
+                                <p className="text-[10px] text-gray-300 mt-1 uppercase">Ctrl+Shift+Y to capture</p>
                             </div>
                         )}
-                        {hooks.map(h => (
-                            <div key={h.id} className="hook-card bg-white p-5 flex justify-between items-center animate-in fade-in slide-in-from-bottom-2">
+                        {hooks.map(hook => (
+                            <div key={hook.id} className="card p-5 flex justify-between items-center animate-in fade-in slide-in-from-bottom-1">
                                 <div>
-                                    <h2 className="font-semibold text-gray-900">{h.brand}</h2>
-                                    <p className="text-xs text-gray-500 truncate w-64">{h.url}</p>
+                                    <h3 className="font-semibold text-lg">{hook.brand}</h3>
+                                    <p className="text-xs text-gray-400 truncate w-48 sm:w-80">{hook.url}</p>
                                 </div>
-                                <div className="text-right">
-                                    <a href={h.url} target="_blank" className="text-xs font-semibold bg-black text-white px-4 py-2 rounded-lg">Open</a>
-                                    <p className="text-[10px] text-gray-300 mt-2">{h.timestamp}</p>
-                                </div>
+                                <a href={hook.url} target="_blank" className="bg-black text-white text-xs px-5 py-2.5 rounded-xl font-medium hover:opacity-80 transition-opacity">
+                                    Open
+                                </a>
                             </div>
                         ))}
                     </div>
