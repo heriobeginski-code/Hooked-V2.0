@@ -3,96 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hooked AI | Shader Dashboard</title>
+    <title>Hooked Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-
-    <link href="https://fonts.googleapis.com/css2?family=Geist+Mono&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Geist Mono', monospace; }
-        #bg-canvas { position: fixed; top: 0; left: 0; z-index: 1; }
-        #root { position: relative; z-index: 10; height: 100vh; overflow-y: auto; background: rgba(0,0,0,0.2); }
-        
-        .glass-card { 
-            background: rgba(255, 255, 255, 0.03); 
-            backdrop-filter: blur(8px); 
-            border: 1px solid rgba(255, 255, 255, 0.1); 
-            cursor: pointer; /* FIXED: Change arrow to hand */
-            transition: all 0.2s ease-in-out;
-        }
-        
-        .glass-card:hover {
-            border-color: rgba(255, 87, 34, 0.5); /* Glowing edge on hover */
-            background: rgba(255, 255, 255, 0.06);
-            transform: translateY(-2px);
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #F5F5F5; }
+        .hook-card { transition: all 0.2s ease; border: 1px solid rgba(0,0,0,0.05); }
+        .hook-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); }
     </style>
 </head>
 <body>
-    <canvas id="bg-canvas"></canvas>
     <div id="root"></div>
-
-    <script>
-        const vertexShader = `
-            uniform float time;
-            varying vec2 vUv;
-            void main() {
-                vUv = uv;
-                vec3 pos = position;
-                pos.y += sin(pos.x * 10.0 + time) * 0.1;
-                pos.x += cos(pos.y * 8.0 + time * 1.5) * 0.05;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-            }
-        `;
-
-        const fragmentShader = `
-            uniform float time;
-            uniform vec3 color1;
-            uniform vec3 color2;
-            varying vec2 vUv;
-            void main() {
-                vec2 uv = vUv;
-                float noise = sin(uv.x * 20.0 + time) * cos(uv.y * 15.0 + time * 0.8);
-                vec3 color = mix(color1, color2, noise * 0.5 + 0.5);
-                float glow = 1.0 - length(uv - 0.5) * 2.0;
-                gl_FragColor = vec4(color * pow(glow, 2.0), 0.6);
-            }
-        `;
-
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('bg-canvas'), alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-
-        const geometry = new THREE.PlaneGeometry(10, 10, 64, 64);
-        const uniforms = {
-            time: { value: 0 },
-            color1: { value: new THREE.Color("#ff5722") },
-            color2: { value: new THREE.Color("#000000") }
-        };
-        const material = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader, transparent: true, side: THREE.DoubleSide });
-        const plane = new THREE.Mesh(geometry, material);
-        scene.add(plane);
-        camera.position.z = 3;
-
-        function animate() {
-            requestAnimationFrame(animate);
-            uniforms.time.value += 0.005; // Slightly slower movement for elegance
-            renderer.render(scene, camera);
-        }
-        animate();
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    </script>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
@@ -100,75 +24,47 @@
         function App() {
             const [hooks, setHooks] = useState([]);
 
-            // Helper to clean up titles
-            const getCleanTitle = (url) => {
-                if (!url) return "";
-                return url
-                    .replace(/^https?:\/\/(www\.)?/, '') // Remove http/https and www
-                    .replace(/\/$/, '');                // Remove trailing slash
-            };
-
-            const getCleanBrand = (url) => {
-                try {
-                    const host = new URL(url).hostname.replace('www.', '');
-                    return host.includes('github.io') ? "GH-PAGES" : host.split('.')[0].toUpperCase();
-                } catch (e) { return "SOURCE"; }
-            };
-
             useEffect(() => {
-                const saved = localStorage.getItem('hooked_data');
-                if (saved) setHooks(JSON.parse(saved));
-
                 const handleMessage = (event) => {
-                    if (event.data && event.data.type === "NEW_HOOKS") {
-                        setHooks(event.data.data);
-                        localStorage.setItem('hooked_data', JSON.stringify(event.data.data));
+                    if (event.data.source !== 'HOOKED_BRIDGE') return;
+
+                    if (event.data.type === 'NEW_HOOK') {
+                        setHooks(prev => [event.data.hook, ...prev]);
+                    } else if (event.data.type === 'FLUSH_HOOKS') {
+                        setHooks(prev => [...event.data.hooks, ...prev]);
                     }
                 };
-                window.addEventListener("message", handleMessage);
-                return () => window.removeEventListener("message", handleMessage);
+
+                window.addEventListener('message', handleMessage);
+                return () => window.removeEventListener('message', handleMessage);
             }, []);
 
             return (
-                <div className="max-w-6xl mx-auto px-8 py-12">
-                    <header className="flex justify-between items-baseline mb-20 border-b border-white/10 pb-6">
-                        <div>
-                            <h1 className="text-2xl font-bold tracking-tighter uppercase italic">
-                                Hooked <span className="text-[#ff5722]">AI</span>
-                            </h1>
-                            <p className="text-[9px] text-gray-500 tracking-[0.4em] mt-1 uppercase">Local Insight Vault // v2.1</p>
-                        </div>
-                        <button onClick={() => {localStorage.clear(); setHooks([]);}} className="text-[10px] text-gray-600 hover:text-red-400 transition tracking-widest uppercase">Clear All</button>
+                <div className="max-w-5xl mx-auto p-8">
+                    <header className="flex justify-between items-center mb-12">
+                        <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Hooked</h1>
+                        <div className="text-sm text-gray-400">Live Handshake Active</div>
                     </header>
 
                     {hooks.length === 0 ? (
-                        <div className="text-center py-40 bg-white/[0.02] border border-dashed border-white/10 rounded-2xl">
-                            <p className="text-gray-600 text-[10px] tracking-[0.2em] animate-pulse">NO INCOMING DATA DETECTED</p>
+                        <div className="text-center py-24 bg-white rounded-2xl border border-black/5">
+                            <p className="text-gray-400 italic">No hooks yet. Use Alt + S on any tab to capture.</p>
                         </div>
                     ) : (
-                        <div className="flex flex-col gap-6">
-                            {hooks.map((hook) => (
-                                <div 
-                                    key={hook.id} 
-                                    className="glass-card p-8 rounded-2xl group" 
-                                    onClick={() => window.open(hook.url, '_blank')}
-                                >
-                                    <div className="flex justify-between items-center mb-4">
-                                        <span className="text-[10px] text-[#ff5722] font-bold tracking-widest uppercase">
-                                            {getCleanBrand(hook.url)}
-                                        </span>
-                                        <span className="text-[10px] text-gray-600 font-mono">
-                                            {new Date(hook.timestamp || Date.now()).toLocaleDateString()}
-                                        </span>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {hooks.map(hook => (
+                                <div key={hook.id} className="hook-card bg-white p-6 rounded-2xl">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <span className="text-xs font-bold tracking-widest text-gray-400 uppercase">{hook.brand}</span>
+                                        <span className="text-[10px] text-gray-300">{new Date(hook.timestamp).toLocaleTimeString()}</span>
                                     </div>
-                                    <h3 className="text-base text-gray-100 font-light truncate group-hover:text-white transition">
-                                        {getCleanTitle(hook.url)}
-                                    </h3>
-                                    <div className="mt-4 pt-4 border-t border-white/5">
-                                        <p className="text-[10px] text-gray-600 italic tracking-tight font-mono uppercase">
-                                            // Status: Capture Secured
-                                        </p>
-                                    </div>
+                                    <a 
+                                        href={hook.url} 
+                                        target="_blank" 
+                                        className="inline-block w-full text-center py-3 bg-gray-900 text-white rounded-full text-sm font-medium active:scale-95 transition-transform"
+                                    >
+                                        Launch
+                                    </a>
                                 </div>
                             ))}
                         </div>
