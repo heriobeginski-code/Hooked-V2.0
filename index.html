@@ -3,38 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hooked Dashboard</title>
+    <title>Hooked | Demo Mode</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background-color: #F5F5F5; 
-            color: #1A1A1A;
-            margin: 0;
-        }
-        .hook-card { 
-            background: white; 
-            border: 1px solid rgba(0,0,0,0.05); 
-            border-radius: 16px; 
-            transition: all 0.2s ease;
-        }
-        .hook-card:hover { 
-            border-color: rgba(0,0,0,0.1);
-            transform: translateY(-1px);
-        }
-        .btn-clear {
-            transition: all 0.2s ease;
-            border: 1px solid rgba(0,0,0,0.05);
-        }
-        .btn-clear:hover {
-            background-color: #fee2e2;
-            color: #dc2626;
-            border-color: #fecaca;
-        }
+        body { font-family: 'Inter', sans-serif; background-color: #F5F5F5; color: #1A1A1A; }
+        .hook-card { background: white; border: 1px solid rgba(0,0,0,0.05); border-radius: 16px; }
+        .btn-reset { background: white; color: #EF4444; border: 1px solid #FEE2E2; transition: all 0.2s; }
+        .btn-reset:hover { background: #FEF2F2; border-color: #FECACA; }
     </style>
 </head>
 <body>
@@ -44,15 +23,13 @@
         const { useState, useEffect } = React;
 
         function App() {
-            // Load initial state from localStorage if it exists
             const [hooks, setHooks] = useState(() => {
-                const saved = localStorage.getItem('hooked_session');
+                const saved = localStorage.getItem('hooked_demo');
                 return saved ? JSON.parse(saved) : [];
             });
 
-            // Save to localStorage whenever hooks change
             useEffect(() => {
-                localStorage.setItem('hooked_session', JSON.stringify(hooks));
+                localStorage.setItem('hooked_demo', JSON.stringify(hooks));
             }, [hooks]);
 
             useEffect(() => {
@@ -60,17 +37,18 @@
                     if (event.data && event.data.type === "NEW_HOOKS") {
                         const incoming = event.data.data;
                         
-                        // If it's the full array (on load)
-                        if (Array.isArray(incoming)) {
-                            setHooks(incoming);
-                        } else {
-                            // If it's a single item (refined push)
-                            setHooks(prev => {
-                                // Prevent duplicates in the same session
-                                if (prev.find(h => h.id === incoming.id)) return prev;
-                                return [incoming, ...prev];
-                            });
-                        }
+                        setHooks(prev => {
+                            // 1. If it's the full history array (first load)
+                            if (Array.isArray(incoming)) {
+                                // To fix the "all tabs" bug, we take ONLY the first (most recent) item 
+                                // if we are in the middle of a demo capture.
+                                return incoming; 
+                            }
+                            
+                            // 2. If it's a single item (The Sniper Fix)
+                            const exists = prev.some(h => h.id === incoming.id);
+                            return exists ? prev : [incoming, ...prev];
+                        });
                     }
                 };
 
@@ -79,60 +57,45 @@
             }, []);
 
             const clearAll = () => {
-                if (window.confirm("Clear all captured hooks?")) {
-                    setHooks([]);
-                    localStorage.removeItem('hooked_session');
-                }
+                setHooks([]);
+                localStorage.removeItem('hooked_demo');
             };
 
             return (
-                <div className="max-w-2xl mx-auto px-6 py-12">
-                    <header className="flex justify-between items-center mb-10">
+                <div className="max-w-xl mx-auto py-16 px-6">
+                    <header className="flex justify-between items-center mb-12">
                         <div>
                             <h1 className="text-2xl font-semibold tracking-tight">Hooked</h1>
-                            <p className="text-xs text-gray-400 mt-1 uppercase tracking-widest font-medium">Capture Engine Active</p>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] mt-1">Collector Engine</p>
                         </div>
                         
-                        <div className="flex items-center gap-3">
-                            {hooks.length > 0 && (
-                                <button 
-                                    onClick={clearAll}
-                                    className="btn-clear bg-white text-gray-400 text-[10px] font-bold uppercase tracking-tighter px-3 py-1.5 rounded-lg"
-                                >
-                                    Clear All
-                                </button>
-                            )}
-                            <div className="px-4 py-1.5 bg-white border border-black/5 rounded-full shadow-sm">
-                                <span className="text-xs font-semibold text-gray-400">
-                                    {hooks.length}
-                                </span>
+                        <div className="flex gap-3">
+                            <button onClick={clearAll} className="btn-reset px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest">
+                                Reset
+                            </button>
+                            <div className="bg-white border border-black/5 px-4 py-2 rounded-full text-sm font-bold text-gray-400 shadow-sm">
+                                {hooks.length}
                             </div>
                         </div>
                     </header>
 
-                    <main className="space-y-3">
+                    <div className="space-y-3">
                         {hooks.length === 0 ? (
-                            <div className="text-center py-20 border-2 border-dashed border-gray-200 rounded-[24px]">
-                                <p className="text-gray-400 text-sm font-medium">Ready for your demo capture...</p>
+                            <div className="py-20 text-center border-2 border-dashed border-gray-200 rounded-[32px]">
+                                <p className="text-gray-400 text-sm font-medium">Dashboard Clean. Ready to Hook.</p>
                             </div>
                         ) : (
-                            hooks.map((hook) => (
-                                <div key={hook.id} className="hook-card p-5 flex justify-between items-center animate-in fade-in slide-in-from-bottom-2">
-                                    <div className="overflow-hidden mr-4">
-                                        <h2 className="text-base font-semibold text-gray-800">{hook.brand}</h2>
-                                        <p className="text-[11px] text-gray-400 truncate max-w-[250px]">{hook.url}</p>
+                            hooks.map(h => (
+                                <div key={h.id} className="hook-card p-6 flex justify-between items-center animate-in fade-in slide-in-from-bottom-3">
+                                    <div className="truncate mr-4">
+                                        <h3 className="font-semibold text-gray-800">{h.brand}</h3>
+                                        <p className="text-[11px] text-gray-400 truncate mt-0.5">{h.url}</p>
                                     </div>
-                                    <a 
-                                        href={hook.url} 
-                                        target="_blank" 
-                                        className="bg-black text-white text-[11px] font-bold px-5 py-2 rounded-xl hover:opacity-80 transition-opacity"
-                                    >
-                                        OPEN
-                                    </a>
+                                    <a href={h.url} target="_blank" className="bg-black text-white text-[10px] font-bold px-5 py-2.5 rounded-xl uppercase tracking-tighter">Open</a>
                                 </div>
                             ))
                         )}
-                    </main>
+                    </div>
                 </div>
             );
         }
