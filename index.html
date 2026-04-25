@@ -1,16 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="apple-touch-icon" href="app-icon.jpg">
-
-<link rel="icon" type="image/jpeg" href="app-icon.jpg">
-
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Hooked">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hooked | Neural Asset Weave</title>
+    
+    <link rel="apple-touch-icon" href="app-icon.jpg">
+    <link rel="icon" type="image/jpeg" href="app-icon.jpg">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Hooked">
+
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -22,10 +22,7 @@
         :root { --bg-dark: #000000; --accent: #6366f1; }
         body { margin: 0; background-color: var(--bg-dark); font-family: 'Sora', sans-serif; color: white; height: 100vh; overflow: hidden; }
         
-        /* FIXED: Added z-index -1 to keep backdrop behind UI */
         #canvas-container { position: fixed; inset: 0; z-index: -1; pointer-events: none; }
-        
-        /* UI LAYER: Ensures content stays on top */
         #root { position: relative; z-index: 10; height: 100vh; display: flex; flex-direction: column; }
 
         .folder-card { 
@@ -35,12 +32,10 @@
             border-radius: 28px; 
             transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
         }
-        .folder-card:hover { background: rgba(255, 255, 255, 0.07); border-color: rgba(99, 102, 241, 0.4); transform: translateY(-4px); }
+        .folder-card:hover { background: rgba(255, 255, 255, 0.05); border-color: rgba(99, 102, 241, 0.4); transform: translateY(-4px); }
         .folder-card.drag-over { background: rgba(99, 102, 241, 0.2); border-color: var(--accent); transform: scale(1.05); }
         
         .link-pill { backdrop-filter: blur(10px); background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); cursor: grab; }
-        .link-pill:active { cursor: grabbing; }
-        
         .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
 </head>
@@ -51,6 +46,75 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
+        // --- COMPONENT: PIXEL CANVAS (CARD EFFECT) ---
+        const PixelCanvas = ({ colors = ["#6366f1", "#818cf8", "#ffffff"], gap = 8 }) => {
+            const canvasRef = useRef(null);
+            const containerRef = useRef(null);
+            const animationRef = useRef(null);
+            const pixels = useRef([]);
+
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                const parent = containerRef.current.parentElement;
+
+                const initCanvas = () => {
+                    const rect = parent.getBoundingClientRect();
+                    canvas.width = rect.width;
+                    canvas.height = rect.height;
+                    createPixels();
+                };
+
+                const createPixels = () => {
+                    pixels.current = [];
+                    for (let x = 0; x < canvas.width; x += gap) {
+                        for (let y = 0; y < canvas.height; y += gap) {
+                            pixels.current.push({
+                                x, y,
+                                size: 0,
+                                maxSize: Math.random() * 2 + 1,
+                                color: colors[Math.floor(Math.random() * colors.length)],
+                                speed: Math.random() * 0.1 + 0.05
+                            });
+                        }
+                    }
+                };
+
+                const animate = (type) => {
+                    cancelAnimationFrame(animationRef.current);
+                    const render = () => {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        let active = false;
+                        pixels.current.forEach(p => {
+                            if (type === 'in' && p.size < p.maxSize) { p.size += p.speed; active = true; }
+                            else if (type === 'out' && p.size > 0) { p.size -= p.speed; active = true; }
+                            if (p.size > 0) {
+                                ctx.fillStyle = p.color;
+                                ctx.fillRect(p.x, p.y, p.size, p.size);
+                            }
+                        });
+                        if (active) animationRef.current = requestAnimationFrame(render);
+                    };
+                    render();
+                };
+
+                parent.addEventListener('mouseenter', () => animate('in'));
+                parent.addEventListener('mouseleave', () => animate('out'));
+                window.addEventListener('resize', initCanvas);
+                initCanvas();
+
+                return () => {
+                    window.removeEventListener('resize', initCanvas);
+                    cancelAnimationFrame(animationRef.current);
+                };
+            }, []);
+
+            return <div ref={containerRef} className="absolute inset-0 pointer-events-none opacity-30">
+                <canvas ref={canvasRef} />
+            </div>;
+        };
+
+        // --- COMPONENT: WOVEN LIGHT (BACKGROUND) ---
         const ParticleBackdrop = () => {
             const mountRef = useRef(null);
             useEffect(() => {
@@ -58,9 +122,9 @@
                 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
                 renderer.setSize(window.innerWidth, window.innerHeight);
+                document.getElementById('canvas-container').innerHTML = '';
                 document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-                // High-End Woven Particles
                 const geo = new THREE.TorusKnotGeometry(3, 0.8, 200, 30);
                 const mat = new THREE.PointsMaterial({ size: 0.012, color: 0x6366f1, transparent: true, opacity: 0.4 });
                 const points = new THREE.Points(geo, mat);
@@ -83,11 +147,11 @@
                 window.addEventListener('resize', handleResize);
                 return () => window.removeEventListener('resize', handleResize);
             }, []);
-            return null; 
+            return null;
         };
 
+        // --- MAIN APPLICATION ---
         function App() {
-            // --- LOGIC: 100% PRESERVED ---
             const [folders, setFolders] = useState(() => {
                 const saved = localStorage.getItem('HOOKED_CANVAS_V1');
                 return saved ? JSON.parse(saved) : { "Inbox": [] };
@@ -140,15 +204,9 @@
                             <h1 className="text-4xl font-black tracking-tighter italic">HOOKED</h1>
                             <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-[0.4em]">Neural Asset Weave</p>
                         </div>
-                        <button 
-                            onClick={() => setIsAddingFolder(true)}
-                            className="bg-white text-black px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform"
-                        >
-                            + New Sector
-                        </button>
+                        <button onClick={() => setIsAddingFolder(true)} className="bg-white text-black px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform">+ New Sector</button>
                     </header>
 
-                    {/* RESTORED: THE FOLDER GRID */}
                     <main className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-8 overflow-y-auto no-scrollbar pb-40">
                         {Object.keys(folders).map(name => (
                             <div 
@@ -157,30 +215,23 @@
                                 onDragLeave={(e) => e.currentTarget.classList.remove('drag-over')}
                                 onDrop={(e) => { e.currentTarget.classList.remove('drag-over'); onDrop(e, name); }}
                                 onClick={() => setActiveFolder(name)}
-                                className="folder-card p-12 flex flex-col items-center justify-center cursor-pointer group"
+                                className="folder-card relative p-12 flex flex-col items-center justify-center cursor-pointer group overflow-hidden"
                             >
-                                <div className="text-4xl mb-4 group-hover:scale-110 transition-transform">📂</div>
-                                <h3 className="font-bold text-xs uppercase tracking-widest text-gray-300">{name}</h3>
-                                <div className="mt-4 px-4 py-1.5 bg-indigo-500/10 rounded-full text-[9px] text-indigo-300 font-bold">
+                                <PixelCanvas gap={8} />
+                                <div className="relative z-10 text-4xl mb-4 group-hover:scale-110 transition-transform">📂</div>
+                                <h3 className="relative z-10 font-bold text-xs uppercase tracking-widest text-gray-300">{name}</h3>
+                                <div className="relative z-10 mt-4 px-4 py-1.5 bg-indigo-500/10 rounded-full text-[9px] text-indigo-300 font-bold">
                                     {folders[name].length} UNITS
                                 </div>
                             </div>
                         ))}
                     </main>
 
-                    {/* RESTORED: THE INBOX DOCK */}
                     <footer className="fixed bottom-10 left-10 right-10">
                         <div className="bg-black/40 backdrop-blur-3xl border border-white/10 p-6 rounded-[32px] flex items-center gap-6 overflow-x-auto no-scrollbar shadow-2xl">
-                            <div className="flex-shrink-0 text-[10px] font-black text-gray-500 uppercase tracking-tighter border-r border-white/10 pr-6 leading-tight">
-                                Incoming<br/>Stream
-                            </div>
+                            <div className="flex-shrink-0 text-[10px] font-black text-gray-500 uppercase tracking-tighter border-r border-white/10 pr-6">Incoming<br/>Stream</div>
                             {folders["Inbox"].map(link => (
-                                <div 
-                                    key={link.id}
-                                    draggable
-                                    onDragStart={(e) => onDragStart(e, link, "Inbox")}
-                                    className="link-pill px-6 py-4 rounded-2xl flex flex-col min-w-[170px]"
-                                >
+                                <div key={link.id} draggable onDragStart={(e) => onDragStart(e, link, "Inbox")} className="link-pill px-6 py-4 rounded-2xl flex flex-col min-w-[170px]">
                                     <span className="font-black text-[11px] tracking-tight">{link.brand}</span>
                                     <span className="text-[9px] text-gray-500 truncate">{link.url}</span>
                                 </div>
@@ -188,7 +239,7 @@
                         </div>
                     </footer>
 
-                    {/* FOLDER POPUP */}
+                    {/* MODALS PRESERVED AS BEFORE */}
                     {activeFolder && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-black/80 backdrop-blur-md">
                             <div className="bg-[#0c0c0c] w-full max-w-xl rounded-[48px] border border-white/10 p-12 shadow-2xl">
@@ -197,45 +248,27 @@
                                     <button onClick={() => setActiveFolder(null)} className="text-gray-500 hover:text-white font-bold">✕</button>
                                 </div>
                                 <div className="space-y-3 max-h-[40vh] overflow-y-auto no-scrollbar">
-                                    {folders[activeFolder].length === 0 ? (
-                                        <p className="text-gray-600 text-center italic py-10">No assets in this sector.</p>
-                                    ) : (
+                                    {folders[activeFolder].length === 0 ? <p className="text-gray-600 text-center italic py-10">No assets in this sector.</p> : 
                                         folders[activeFolder].map(link => (
                                             <div key={link.id} className="flex justify-between items-center p-5 bg-white/5 rounded-2xl">
-                                                <div className="truncate pr-4">
-                                                    <p className="font-bold text-xs tracking-tight">{link.brand}</p>
-                                                    <p className="text-[9px] text-gray-500 truncate italic">{link.url}</p>
-                                                </div>
+                                                <div className="truncate pr-4"><p className="font-bold text-xs tracking-tight">{link.brand}</p></div>
                                                 <a href={link.url} target="_blank" className="bg-indigo-600 px-6 py-2 rounded-xl text-[10px] font-black uppercase">Launch</a>
                                             </div>
                                         ))
-                                    )}
+                                    }
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* ADD FOLDER MODAL */}
                     {isAddingFolder && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-2xl">
                             <div className="bg-[#0c0c0c] p-12 rounded-[48px] border border-indigo-500/20 w-full max-w-sm">
                                 <h2 className="text-[10px] font-black mb-8 uppercase tracking-[0.4em] text-center text-indigo-400 italic">Initialize Sector</h2>
-                                <input 
-                                    autoFocus
-                                    className="w-full bg-black border-b border-white/10 p-5 text-white mb-10 outline-none focus:border-indigo-500 text-center text-lg font-bold uppercase"
-                                    placeholder="Sector Name"
-                                    value={newFolderName}
-                                    onChange={(e) => setNewFolderName(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && (setFolders(p => ({...p, [newFolderName]:[]})), setIsAddingFolder(false), setNewFolderName(""))}
-                                />
+                                <input autoFocus className="w-full bg-black border-b border-white/10 p-5 text-white mb-10 outline-none focus:border-indigo-500 text-center text-lg font-bold uppercase" placeholder="Sector Name" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (setFolders(p => ({...p, [newFolderName]:[]})), setIsAddingFolder(false), setNewFolderName(""))} />
                                 <div className="flex gap-4">
                                     <button onClick={() => setIsAddingFolder(false)} className="flex-1 text-gray-600 font-bold text-[10px] uppercase">Abort</button>
-                                    <button 
-                                        onClick={() => { if(newFolderName) { setFolders(p => ({...p, [newFolderName]:[]})); setIsAddingFolder(false); setNewFolderName(""); }}} 
-                                        className="flex-1 bg-white text-black p-4 rounded-2xl font-black text-[10px] uppercase tracking-widest"
-                                    >
-                                        Create
-                                    </button>
+                                    <button onClick={() => { if(newFolderName) { setFolders(p => ({...p, [newFolderName]:[]})); setIsAddingFolder(false); setNewFolderName(""); }}} className="flex-1 bg-white text-black p-4 rounded-2xl font-black text-[10px] uppercase tracking-widest">Create</button>
                                 </div>
                             </div>
                         </div>
