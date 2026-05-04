@@ -116,14 +116,14 @@
 
         // --- COMPONENT: WOVEN LIGHT (BACKGROUND) ---
         const ParticleBackdrop = () => {
-            const mountRef = useRef(null);
             useEffect(() => {
                 const scene = new THREE.Scene();
                 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
                 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
                 renderer.setSize(window.innerWidth, window.innerHeight);
-                document.getElementById('canvas-container').innerHTML = '';
-                document.getElementById('canvas-container').appendChild(renderer.domElement);
+                const container = document.getElementById('canvas-container');
+                container.innerHTML = '';
+                container.appendChild(renderer.domElement);
 
                 const geo = new THREE.TorusKnotGeometry(3, 0.8, 200, 30);
                 const mat = new THREE.PointsMaterial({ size: 0.012, color: 0x6366f1, transparent: true, opacity: 0.4 });
@@ -160,16 +160,34 @@
             const [isAddingFolder, setIsAddingFolder] = useState(false);
             const [newFolderName, setNewFolderName] = useState("");
 
+            // Sync with LocalStorage
             useEffect(() => {
                 localStorage.setItem('HOOKED_CANVAS_V1', JSON.stringify(folders));
             }, [folders]);
 
+            // Extension Communication Listener
             useEffect(() => {
                 const handleMessage = (event) => {
-                    if (event.data && event.data.source === 'HOOKED_EXTENSION') {
-                        const incoming = event.data.data;
-                        const newHook = Array.isArray(incoming) ? incoming[0] : incoming;
-                        setFolders(prev => ({ ...prev, "Inbox": [newHook, ...prev["Inbox"]] }));
+                    // Check for the specific bridge source from dashboard-bridge.js
+                    if (event.data && event.data.source === 'HOOKED_BRIDGE') {
+                        console.log("📥 Bridge Handshake Success:", event.data);
+
+                        setFolders(prev => {
+                            const next = { ...prev };
+                            
+                            if (event.data.type === 'NEW_HOOK') {
+                                // Add single new capture to Inbox
+                                const hook = event.data.hook;
+                                next["Inbox"] = [hook, ...next["Inbox"]];
+                            } 
+                            else if (event.data.type === 'PENDING_HOOKS') {
+                                // Add all missed captures to Inbox
+                                const missed = event.data.hooks;
+                                next["Inbox"] = [...missed, ...next["Inbox"]];
+                            }
+                            
+                            return next;
+                        });
                     }
                 };
                 window.addEventListener('message', handleMessage);
@@ -221,7 +239,7 @@
                                 <div className="relative z-10 text-4xl mb-4 group-hover:scale-110 transition-transform">📂</div>
                                 <h3 className="relative z-10 font-bold text-xs uppercase tracking-widest text-gray-300">{name}</h3>
                                 <div className="relative z-10 mt-4 px-4 py-1.5 bg-indigo-500/10 rounded-full text-[9px] text-indigo-300 font-bold">
-                                    {folders[name].length} UNITS
+                                    {folders[name]?.length || 0} UNITS
                                 </div>
                             </div>
                         ))}
@@ -230,7 +248,7 @@
                     <footer className="fixed bottom-10 left-10 right-10">
                         <div className="bg-black/40 backdrop-blur-3xl border border-white/10 p-6 rounded-[32px] flex items-center gap-6 overflow-x-auto no-scrollbar shadow-2xl">
                             <div className="flex-shrink-0 text-[10px] font-black text-gray-500 uppercase tracking-tighter border-r border-white/10 pr-6">Incoming<br/>Stream</div>
-                            {folders["Inbox"].map(link => (
+                            {folders["Inbox"]?.map(link => (
                                 <div key={link.id} draggable onDragStart={(e) => onDragStart(e, link, "Inbox")} className="link-pill px-6 py-4 rounded-2xl flex flex-col min-w-[170px]">
                                     <span className="font-black text-[11px] tracking-tight">{link.brand}</span>
                                     <span className="text-[9px] text-gray-500 truncate">{link.url}</span>
@@ -239,7 +257,6 @@
                         </div>
                     </footer>
 
-                    {/* MODALS PRESERVED AS BEFORE */}
                     {activeFolder && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-black/80 backdrop-blur-md">
                             <div className="bg-[#0c0c0c] w-full max-w-xl rounded-[48px] border border-white/10 p-12 shadow-2xl">
